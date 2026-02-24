@@ -29,24 +29,20 @@ fi
 
 capture() {
   local output
-  output=$(tmux -L cc capture-pane -p -J -t "$SESSION" -S "-${LINES}" 2>/dev/null)
-  
+  output=$(tmux -L cc capture-pane -p -J -t "$SESSION" -S "-${LINES}" 2>/dev/null || echo "")
+
   if [[ "$JSON" == true ]]; then
-    # Extract last exchange
-    local last_prompt last_reply
-    last_prompt=$(echo "$output" | grep -n '❯' | tail -1 | cut -d: -f1)
-    last_reply=$(echo "$output" | grep -n '⏺' | tail -1 | cut -d: -f1)
-    
     local alive="true"
     tmux -L cc has-session -t "$SESSION" 2>/dev/null || alive="false"
-    
-    jq -n \
-      --arg session "$SESSION" \
-      --arg alive "$alive" \
-      --arg output "$output" \
-      --arg last_prompt_line "${last_prompt:-}" \
-      --arg last_reply_line "${last_reply:-}" \
-      '{session: $session, alive: ($alive == "true"), lastPromptLine: $last_prompt_line, lastReplyLine: $last_reply_line, output: $output}'
+
+    # Pure bash JSON output — no jq dependency
+    # Escape output for JSON string
+    local escaped
+    escaped=$(printf '%s' "$output" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null \
+      || printf '%s' "$output" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+
+    printf '{"session":"%s","alive":%s,"lines":%d,"output":%s}\n' \
+      "$SESSION" "$alive" "$LINES" "$escaped"
   else
     echo "=== $SESSION (last $LINES lines) ==="
     echo "$output"

@@ -14,7 +14,7 @@ metadata:
       {
         "emoji": "⚡",
         "os": ["darwin", "linux"],
-        "requires": { "bins": ["tmux"], "anyBins": ["claude"] },
+        "requires": { "bins": ["tmux", "bash"], "anyBins": ["claude"] },
       },
   }
 ---

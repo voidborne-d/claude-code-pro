@@ -25,16 +25,13 @@ if [[ "$JSON" == true ]]; then
     name=$(echo "$line" | awk '{print $1}')
     created=$(echo "$line" | awk '{print $2}')
     activity=$(echo "$line" | awk '{print $3}')
-    last_line=$(tmux -L cc capture-pane -p -J -t "$name" -S -5 2>/dev/null | tail -1 || echo "")
-    
+    last_line=$(tmux -L cc capture-pane -p -J -t "$name" -S -5 2>/dev/null | tail -1 | sed 's/\\/\\\\/g; s/"/\\"/g' || echo "")
+
     [[ "$first" == true ]] && first=false || echo ","
-    jq -n \
-      --arg name "$name" \
-      --arg created "$created" \
-      --arg activity "$activity" \
-      --arg last "$last_line" \
-      '{session: $name, created: ($created | tonumber), lastActivity: ($activity | tonumber), lastLine: $last}'
+    printf '  {"session":"%s","created":%s,"lastActivity":%s,"lastLine":"%s"}' \
+      "$name" "$created" "$activity" "$last_line"
   done <<< "$sessions"
+  echo ""
   echo "]"
 else
   echo "Active Claude Code sessions:"
@@ -43,6 +40,6 @@ else
     name=$(echo "$line" | awk '{print $1}')
     label=${name#cc-}
     last_line=$(tmux -L cc capture-pane -p -J -t "$name" -S -3 2>/dev/null | tail -1 || echo "")
-    echo "🔧 $label → $last_line"
+    echo "⚡ $label → $last_line"
   done <<< "$sessions"
 fi
