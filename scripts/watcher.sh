@@ -40,20 +40,20 @@ while tmux -L cc has-session -t "$SESSION" 2>/dev/null; do
     continue
   fi
 
-  # Pattern 1: Permission bypass dialog
+  # Pattern 1: Permission bypass dialog — need to move to option 2 then confirm
   # "› 1. No, exit"  "  2. Yes, I accept"
   if echo "$CONTENT" | grep -q "No, exit" && echo "$CONTENT" | grep -q "Yes, I accept"; then
-    log "Detected permission dialog → sending '2' (accept)"
-    tmux -L cc send-keys -t "$SESSION" "2" Enter
+    log "Detected permission dialog → navigating to 'Yes, I accept' and confirming"
+    tmux -L cc send-keys -t "$SESSION" Down Enter
     sleep 3
     continue
   fi
 
-  # Pattern 2: Plan mode confirmation
-  # "› 1. Yes, clear context" or "Would you like to proceed?"
+  # Pattern 2: Plan mode confirmation — option 1 is already selected by default
+  # These are interactive select menus, NOT text inputs. Just press Enter.
   if echo "$CONTENT" | grep -q "Yes, clear context\|Yes, and bypass permissions\|Would you like to proceed"; then
-    log "Detected plan confirmation → sending '$CHOICE'"
-    tmux -L cc send-keys -t "$SESSION" "$CHOICE" Enter
+    log "Detected plan confirmation → pressing Enter to confirm default selection"
+    tmux -L cc send-keys -t "$SESSION" Enter
     sleep 3
     continue
   fi
