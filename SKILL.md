@@ -149,7 +149,8 @@ This is what makes the whole approach work. The task signals completion; your ag
 
 | Mode | Flag | Behavior |
 |------|------|----------|
-| auto | `--mode auto` | Full permissions, runs freely (default) |
+| auto | `--mode auto` | Print mode (`-p`), non-interactive, direct execution (default) |
+| plan | `--mode plan` | Interactive mode with plan step. Background watcher auto-approves plan confirmation and permission dialogs. Better for complex tasks where Claude Code benefits from analysis before execution. |
 
 ## Design Choices
 

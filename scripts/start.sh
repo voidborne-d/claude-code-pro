@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Start a Claude Code task in a tmux session (print mode — no interactivity issues)
+# Start a Claude Code task in a tmux session
 # Usage: start.sh --label <name> --workdir <path> [--task <prompt>] [--task-file <file>] [--mode <plan|auto>] [--model <model>]
+#
+# Modes:
+#   auto  — print mode (-p), non-interactive, direct execution (default)
+#   plan  — interactive mode with plan confirmation, background watcher auto-approves
 
 set -euo pipefail
 
@@ -29,6 +33,7 @@ if [[ -z "$LABEL" || -z "$WORKDIR" ]]; then
 fi
 
 SESSION="cc-${LABEL}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Load task from file if specified
 if [[ -n "$TASK_FILE" && -f "$TASK_FILE" ]]; then
@@ -44,31 +49,63 @@ fi
 # Kill existing session if any
 tmux -L cc kill-session -t "$SESSION" 2>/dev/null || true
 
-# Build claude command — always use -p (print mode) for non-interactive execution
-# This avoids: permission confirmation dialogs, plan mode, paste issues
-CLAUDE_CMD="claude -p --dangerously-skip-permissions --verbose"
-
-case $MODE in
-  plan) CLAUDE_CMD="$CLAUDE_CMD --permission-mode plan";;
-  auto) CLAUDE_CMD="$CLAUDE_CMD --permission-mode bypassPermissions";;
-  *) echo "Unknown mode: $MODE"; exit 1;;
-esac
-
+# Build model flag
+MODEL_FLAG=""
 if [[ -n "$MODEL" ]]; then
-  CLAUDE_CMD="$CLAUDE_CMD --model $MODEL"
+  MODEL_FLAG="--model $MODEL"
 fi
 
-# Write task to temp file for safe quoting
-TMPFILE=$(mktemp /tmp/cc-task-XXXXXX.txt)
-printf '%s' "$TASK" > "$TMPFILE"
+case $MODE in
+  auto)
+    # ── Print mode: non-interactive, no dialogs ──
+    CLAUDE_CMD="claude -p --dangerously-skip-permissions --permission-mode bypassPermissions --verbose ${MODEL_FLAG}"
 
-# Create tmux session running claude in print mode
-# Task is passed via stdin from the temp file
-tmux -L cc new-session -d -s "$SESSION" -c "$WORKDIR" \
-  "bash -c '${CLAUDE_CMD} < \"${TMPFILE}\" 2>&1; CODE=\$?; rm -f \"${TMPFILE}\"; echo; echo \"[EXIT CODE: \$CODE]\"; exec bash'"
+    TMPFILE=$(mktemp /tmp/cc-task-XXXXXX.txt)
+    printf '%s' "$TASK" > "$TMPFILE"
 
-echo "✅ Session started: $SESSION"
-echo "📂 Workdir: $WORKDIR"
-echo "🔧 Mode: $MODE (print, non-interactive)"
+    tmux -L cc new-session -d -s "$SESSION" -c "$WORKDIR" \
+      "bash -c '${CLAUDE_CMD} < \"${TMPFILE}\" 2>&1; CODE=\$?; rm -f \"${TMPFILE}\"; echo; echo \"[EXIT CODE: \$CODE]\"; exec bash'"
+
+    echo "✅ Session started: $SESSION"
+    echo "📂 Workdir: $WORKDIR"
+    echo "🔧 Mode: auto (print, non-interactive)"
+    ;;
+
+  plan)
+    # ── Interactive mode with plan: watcher auto-approves dialogs ──
+    CLAUDE_CMD="claude --dangerously-skip-permissions ${MODEL_FLAG}"
+
+    # Create tmux session and start claude
+    tmux -L cc new-session -d -s "$SESSION" -c "$WORKDIR"
+    sleep 0.5
+    tmux -L cc send-keys -t "$SESSION" "$CLAUDE_CMD" Enter
+    sleep 3
+
+    # Send task via load-buffer (safe for multi-line)
+    TMPFILE=$(mktemp /tmp/cc-task-XXXXXX.txt)
+    printf '%s' "$TASK" > "$TMPFILE"
+    tmux -L cc load-buffer "$TMPFILE"
+    tmux -L cc paste-buffer -t "$SESSION"
+    rm -f "$TMPFILE"
+    sleep 0.3
+    tmux -L cc send-keys -t "$SESSION" Enter
+
+    # Start background watcher to auto-approve plan confirmation + permission dialogs
+    nohup bash "${SCRIPT_DIR}/watcher.sh" "$SESSION" 1 \
+      > "/tmp/cc-watcher-${LABEL}.log" 2>&1 &
+    WATCHER_PID=$!
+
+    echo "✅ Session started: $SESSION"
+    echo "📂 Workdir: $WORKDIR"
+    echo "🔧 Mode: plan (interactive + auto-approve watcher PID $WATCHER_PID)"
+    echo "📄 Watcher log: /tmp/cc-watcher-${LABEL}.log"
+    ;;
+
+  *)
+    echo "Unknown mode: $MODE (use 'auto' or 'plan')"
+    exit 1
+    ;;
+esac
+
 echo "👁️ Attach: tmux -L cc attach -t $SESSION"
-echo "📋 Monitor: $(dirname "$0")/monitor.sh --session $SESSION"
+echo "📋 Monitor: ${SCRIPT_DIR}/monitor.sh --session $SESSION"
