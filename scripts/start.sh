@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start a Claude Code task in a tmux session
+# Start a Claude Code task in a tmux session (print mode — no interactivity issues)
 # Usage: start.sh --label <name> --workdir <path> [--task <prompt>] [--task-file <file>] [--mode <plan|auto>] [--model <model>]
 
 set -euo pipefail
@@ -37,48 +37,38 @@ fi
 
 # Guard: must have a task
 if [[ -z "$TASK" ]]; then
-  echo "Error: --task or --task-file required (otherwise Claude Code starts with no input)"
+  echo "Error: --task or --task-file required"
   exit 1
 fi
 
 # Kill existing session if any
 tmux -L cc kill-session -t "$SESSION" 2>/dev/null || true
 
-# Build claude command
-CLAUDE_CMD="claude"
+# Build claude command — always use -p (print mode) for non-interactive execution
+# This avoids: permission confirmation dialogs, plan mode, paste issues
+CLAUDE_CMD="claude -p --dangerously-skip-permissions --verbose"
+
 case $MODE in
   plan) CLAUDE_CMD="$CLAUDE_CMD --permission-mode plan";;
-  auto) CLAUDE_CMD="$CLAUDE_CMD --dangerously-skip-permissions";;
+  auto) CLAUDE_CMD="$CLAUDE_CMD --permission-mode bypassPermissions";;
   *) echo "Unknown mode: $MODE"; exit 1;;
 esac
-
-# ⚠️  auto mode uses --dangerously-skip-permissions: Claude Code runs all tools
-# without confirmation. Only use in trusted environments with version-controlled code.
 
 if [[ -n "$MODEL" ]]; then
   CLAUDE_CMD="$CLAUDE_CMD --model $MODEL"
 fi
 
-# Create tmux session
-tmux -L cc new-session -d -s "$SESSION" -c "$WORKDIR"
-sleep 0.5
-
-# Start claude in interactive mode
-tmux -L cc send-keys -t "$SESSION" "$CLAUDE_CMD" Enter
-sleep 3
-
-# Send task via temp file + tmux load-buffer to handle multi-line safely
+# Write task to temp file for safe quoting
 TMPFILE=$(mktemp /tmp/cc-task-XXXXXX.txt)
 printf '%s' "$TASK" > "$TMPFILE"
-tmux -L cc load-buffer "$TMPFILE"
-tmux -L cc paste-buffer -t "$SESSION"
-rm -f "$TMPFILE"
-sleep 0.3
-tmux -L cc send-keys -t "$SESSION" Enter
+
+# Create tmux session running claude in print mode
+# Task is passed via stdin from the temp file
+tmux -L cc new-session -d -s "$SESSION" -c "$WORKDIR" \
+  "bash -c '${CLAUDE_CMD} < \"${TMPFILE}\" 2>&1; CODE=\$?; rm -f \"${TMPFILE}\"; echo; echo \"[EXIT CODE: \$CODE]\"; exec bash'"
 
 echo "✅ Session started: $SESSION"
 echo "📂 Workdir: $WORKDIR"
-echo "🔧 Mode: $MODE"
-echo "⚠️  Permissions: $([ "$MODE" = "auto" ] && echo "SKIPPED (auto mode)" || echo "plan mode")"
+echo "🔧 Mode: $MODE (print, non-interactive)"
 echo "👁️ Attach: tmux -L cc attach -t $SESSION"
 echo "📋 Monitor: $(dirname "$0")/monitor.sh --session $SESSION"

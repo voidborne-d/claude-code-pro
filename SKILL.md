@@ -95,12 +95,13 @@ bash {baseDir}/scripts/monitor.sh --session my-task --lines 50
 # JSON mode — structured, even fewer tokens for agent parsing
 bash {baseDir}/scripts/monitor.sh --session my-task --json
 
-# Send follow-up (use sparingly — write requirements upfront instead)
+# Send follow-up (starts a new --continue session after the original finishes)
 bash {baseDir}/scripts/send.sh --session my-task --text "Also add unit tests"
-
-# Compact context when running long
-bash {baseDir}/scripts/send.sh --session my-task --compact
 ```
+
+> **Note:** Claude Code runs in **print mode** (`-p`), which is non-interactive.
+> There is no plan mode, no permission dialogs, no need for approve/reject.
+> Follow-ups use `--continue` to resume the conversation in a new session.
 
 ## Manage Sessions
 
