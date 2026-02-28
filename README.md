@@ -1,5 +1,10 @@
 # Claude Code Pro ⚡
 
+[![Token Savings](https://img.shields.io/badge/token%20savings-80--97%25-brightgreen)](https://github.com/voidborne-d/claude-code-pro)
+[![Platform](https://img.shields.io/badge/platform-OpenClaw-purple)](https://clawhub.com)
+[![License](https://img.shields.io/github/license/voidborne-d/claude-code-pro)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/voidborne-d/claude-code-pro?style=social)](https://github.com/voidborne-d/claude-code-pro)
+
 Token-efficient Claude Code workflow for AI agents.
 
 ## The Problem
